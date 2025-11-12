@@ -1,0 +1,19 @@
+[project]
+name = "aliyun-dev-server-cli"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "nysparia", email = "nysparia@pm.me"},
+]
+dependencies = ["alibabacloud-ecs20140526==7.2.*"]
+requires-python = ">=3.12"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
