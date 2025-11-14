@@ -135,9 +135,9 @@ def main():
     image_id = typing.cast(str, image.image_id)
     snapshot_id = typing.cast(str, snapshot.snapshot_id)
     security_group_id = typing.cast(str, security_group.security_group_id)
-    
+
     _log.debug("creating instance...")
-    
+
     created_instance_ids = spot_server_creator.create_server(
         vswitch_id=vswitch_id,
         instance_type_id=server_selected.instance_type_id,
@@ -152,6 +152,21 @@ def main():
         description="created by nysparis aliyun dev server cli",
         # dry_run=True,
     )
+
+    assert len(created_instance_ids) == 1
+
+    block_storage_client = BlockStorageClient(client, region_id)
+    created_disks = block_storage_client.describe_disks(created_instance_ids[0])
+
+    assert len(created_disks) == 2
+    data_disks = block_storage_client.filter_disk_by_disk_type(created_disks, "data")
+    assert len(data_disks) == 1
+
+    # enable performance bursting for created disks if suitable
+    block_storage_client.toggle_bursting(created_disks, True)
+
+    # Tag the data disk using the data disk identifier for future identification
+    block_storage_client.tag_data_disks(created_disks, data_disk_identifier_tag)
 
 
 if __name__ == "__main__":

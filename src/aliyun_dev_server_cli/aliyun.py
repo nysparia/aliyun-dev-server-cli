@@ -17,6 +17,9 @@ from alibabacloud_ecs20140526.models import (
     DescribeSnapshotsRequest,
     DescribeSnapshotsRequestTag,
     DescribeDisksResponseBodyDisksDisk as DiskDescription,
+    ModifyDiskAttributeRequest,
+    TagResourcesRequest,
+    TagResourcesRequestTag,
 )
 from alibabacloud_tea_openapi.exceptions import ClientException
 from alibabacloud_resourcemanager20200331.client import (
@@ -427,6 +430,7 @@ class BlockStorageClient:
     def __init__(self, client: Client, region_id: str) -> None:
         self.client = client
         self.region_id = region_id
+        self.logger = structlog.get_logger()
 
     def describe_disks(self, ecs_instance_id: str) -> List[DiskDescription]:
         disks = self.client.describe_disks(
@@ -438,6 +442,71 @@ class BlockStorageClient:
     @staticmethod
     def filter_disk_by_disk_type(disks: List[DiskDescription], type: DiskType):
         return [disk for disk in disks if disk.type == type]
+
+    def toggle_bursting(self, disks: List[DiskDescription], enabled: bool):
+        """Toggle bursting mode for supported disks.
+
+        Only cloud-auto disks (auto-PL) support bursting mode. Other disk types will be ignored.
+
+        Args:
+            disks: List of disk descriptions to potentially modify
+            enabled: Whether to enable or disable bursting mode
+
+        Returns:
+            The number of disks for which bursting mode was modified
+        """
+        # Filter to only cloud_auto disks as they are the only ones supporting bursting
+        disk_ids = [disk.disk_id for disk in disks if disk.category == "cloud_auto"]
+        disk_ids = typing.cast(List[str], disk_ids)
+        self.client.modify_disk_attribute(
+            ModifyDiskAttributeRequest(disk_ids=disk_ids, bursting_enabled=enabled)
+        )
+
+        self.logger.debug(
+            "toggle bursting_enabled to %s for %i disk(s).",
+            enabled,
+            len(disk_ids),
+            disk_ids=disk_ids,
+        )
+
+        return len(disk_ids)
+
+    def tag_data_disks(
+        self, disks: List[DiskDescription], data_disk_identifier_tag: SingleKeyDict
+    ):
+        """Tag data disks with the specified identifier tag for future identification.
+
+        Filters the provided disks to only include data disks, then tags the specified
+        identifier tag to these disks.
+
+        Args:
+            disks: List of disk descriptions to potentially tag
+            data_disk_identifier_tag: The tag to apply to data disks for identification
+
+        Returns:
+            The number of data disks that were tagged
+        """
+        key, value = get_tag_from_single_key_dict(data_disk_identifier_tag)
+        data_disks = self.filter_disk_by_disk_type(disks=disks, type="data")
+        data_disk_ids = [disk.disk_id for disk in data_disks]
+        data_disk_ids = typing.cast(List[str], data_disk_ids)
+        self.client.tag_resources(
+            TagResourcesRequest(
+                region_id=self.region_id,
+                resource_type="disk",
+                resource_id=data_disk_ids,
+                tag=[TagResourcesRequestTag(key=key, value=value)],
+            )
+        )
+
+        self.logger.debug(
+            "tag %i data disk(s).",
+            len(data_disk_ids),
+            data_disk_ids=data_disk_ids,
+            tag=data_disk_identifier_tag,
+        )
+
+        return len(data_disk_ids)
 
 
 if __name__ == "__main__":
@@ -451,10 +520,24 @@ if __name__ == "__main__":
     client = settings.get_aliyun_client()
     block_storage_client = BlockStorageClient(client, settings.region_id)
 
-    # require an instance with only one data disk
+    # Requires an instance with exactly one data disk.
+    # Both system disk and data disk must use cloud_auto storage category.
     ecs_instance_id = os.getenv("ecs_instance_id")
-    
+
     assert isinstance(ecs_instance_id, str)
+
     disks = block_storage_client.describe_disks(ecs_instance_id=ecs_instance_id)
     data_disks = block_storage_client.filter_disk_by_disk_type(disks, "data")
+
     assert len(data_disks) == 1 and data_disks[0].type == "data"
+
+    block_storage_client.toggle_bursting(disks, True)
+    num_toggled = block_storage_client.toggle_bursting(disks, False)
+
+    assert num_toggled == 2
+
+    num_tagged = block_storage_client.tag_data_disks(
+        disks=disks, data_disk_identifier_tag={"nysparis:test:tag1": "true"}
+    )
+
+    assert num_tagged == 1
