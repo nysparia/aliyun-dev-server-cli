@@ -8,7 +8,8 @@ from rich.pretty import pprint
 
 from .settings import Settings
 from .aliyun import *
-from .spot_servers import SpotServerSelector, batch_describe_price
+from .spot_servers import SpotServerCreator, SpotServerSelector, batch_describe_price
+from .types import SingleKeyDict, get_tag_from_single_key_dict
 
 _log = structlog.get_logger(__name__)
 
@@ -106,6 +107,50 @@ def main():
         "found %i images, use the first (newest).",
         len(images),
         images=[image.image_name for image in images],
+    )
+
+    # Retrieve the matched data disk snapshot
+    instance_identifier_tag = dev_server_creation_settings.instance_identifier_tag()
+    data_disk_identifier_tag = dev_server_creation_settings.data_disk_identifier_tag
+    snapshot_client = SnapshotClient(
+        client,
+        region_id=region_id,
+        resource_group_id=resource_group_id,
+        included_automation_tag=included_automation_tag,
+        instance_identifier_tag=instance_identifier_tag,
+        data_disk_identifier_tag=data_disk_identifier_tag,
+    )
+
+    snapshot = snapshot_client.describe_latest_matched_snapshot("data")
+
+    spot_server_creator = SpotServerCreator(
+        client=client,
+        region_id=region_id,
+        resource_group_id=resource_group_id,
+        included_automation_tag=included_automation_tag,
+        instance_identifier_tag=instance_identifier_tag,
+    )
+
+    vswitch_id = typing.cast(str, vswitch.v_switch_id)
+    image_id = typing.cast(str, image.image_id)
+    snapshot_id = typing.cast(str, snapshot.snapshot_id)
+    security_group_id = typing.cast(str, security_group.security_group_id)
+    
+    _log.debug("creating instance...")
+    
+    created_instance_ids = spot_server_creator.create_server(
+        vswitch_id=vswitch_id,
+        instance_type_id=server_selected.instance_type_id,
+        image_id=image_id,
+        system_disk_size=20,
+        system_disk_category=server_selected.disk_category,
+        data_disk_size=20,
+        data_disk_category=server_selected.disk_category,
+        data_disk_snapshot_id=snapshot_id,
+        security_group_id=security_group_id,
+        instance_name=dev_server_creation_settings.instance_automation_identifier,
+        description="created by nysparis aliyun dev server cli",
+        # dry_run=True,
     )
 
 

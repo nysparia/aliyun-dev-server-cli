@@ -6,15 +6,17 @@ and VPC services, specifically tailored for the dev server CLI application.
 
 from itertools import groupby
 import logging
-from typing import List
+from typing import List, Literal
 import typing
 from alibabacloud_ecs20140526.client import Client
 from alibabacloud_tea_openapi.models import Config
 from alibabacloud_ecs20140526.models import (
+    DescribeDisksRequest,
     DescribeSecurityGroupsRequest,
     DescribeSecurityGroupsRequestTag,
     DescribeSnapshotsRequest,
     DescribeSnapshotsRequestTag,
+    DescribeDisksResponseBodyDisksDisk as DiskDescription,
 )
 from alibabacloud_tea_openapi.exceptions import ClientException
 from alibabacloud_resourcemanager20200331.client import (
@@ -32,7 +34,7 @@ from alibabacloud_vpc20160428.models import (
 from rich import region
 import structlog
 
-from .settings import SingleKeyDict, get_tag_from_single_key_dict
+from .types import DiskType, SingleKeyDict, get_tag_from_single_key_dict
 
 _ = Client
 _ = ClientException
@@ -79,7 +81,7 @@ class ResourceManagerClient:
 
         Raises:
             ValueError: If no resource group or multiple resource groups are found,
-                       or if the resource group status is not OK
+                or if the resource group status is not OK
         """
         # Query Aliyun Resource Manager for resource groups matching the provided name
         resource_groups = self.client.list_resource_groups(
@@ -365,35 +367,50 @@ class SnapshotClient:
         region_id: str,
         resource_group_id: str,
         included_automation_tag: SingleKeyDict,
+        instance_identifier_tag: SingleKeyDict,
+        data_disk_identifier_tag: SingleKeyDict,
     ):
         self.client = client
         self.region_id = region_id
         self.resource_group_id = resource_group_id
         self.included_automation_tag = included_automation_tag
+        self.instance_identifier_tag = instance_identifier_tag
+        self.data_disk_identifier_tag = data_disk_identifier_tag
 
-    def describe_matched_snapshots(self):
-        automation_tag_key, automation_tag_value = get_tag_from_single_key_dict(
-            self.included_automation_tag
-        )
+        automation_tag = self._dict_to_request_tag(self.included_automation_tag)
+        instance_identifier = self._dict_to_request_tag(self.instance_identifier_tag)
+        data_disk_identifier = self._dict_to_request_tag(self.data_disk_identifier_tag)
+
+        self.tags = [automation_tag, instance_identifier, data_disk_identifier]
+        self._original_tags = [
+            self.included_automation_tag,
+            self.instance_identifier_tag,
+            self.data_disk_identifier_tag,
+        ]
+
+    def describe_matched_snapshots(self, source_disk_type: DiskType = "data"):
         snapshots = self.client.describe_snapshots(
             DescribeSnapshotsRequest(
                 region_id=self.region_id,
                 resource_group_id=self.resource_group_id,
-                tag=[
-                    DescribeSnapshotsRequestTag(
-                        key=automation_tag_key, value=automation_tag_value
-                    )
-                ],
+                source_disk_type=source_disk_type,
+                tag=self.tags,
             )
         )
         snapshots = snapshots.body.snapshots.snapshot
         return snapshots
 
-    def describe_latest_matched_snapshot(self):
-        snapshots = self.describe_matched_snapshots()
+    @staticmethod
+    def _dict_to_request_tag(tag: SingleKeyDict) -> DescribeSnapshotsRequestTag:
+        tag_key, tag_value = get_tag_from_single_key_dict(tag)
+        return DescribeSnapshotsRequestTag(key=tag_key, value=tag_value)
+
+    def describe_latest_matched_snapshot(self, source_disk_type: DiskType = "data"):
+        snapshots = self.describe_matched_snapshots(source_disk_type)
         if len(snapshots) == 0:
             raise ValueError(
-                f"No snapshots matching tag {self.included_automation_tag} "
+                f"No snapshots matching tag {self._original_tags} "
+                + f"with source disk type '{source_disk_type}' "
                 + f"under region ID {self.region_id} and resource group ID {self.resource_group_id} are found"
             )
         elif len(snapshots) > 1:
@@ -404,3 +421,40 @@ class SnapshotClient:
             )
         snapshots.sort(key=lambda x: str(x.creation_time), reverse=True)
         return snapshots[0]
+
+
+class BlockStorageClient:
+    def __init__(self, client: Client, region_id: str) -> None:
+        self.client = client
+        self.region_id = region_id
+
+    def describe_disks(self, ecs_instance_id: str) -> List[DiskDescription]:
+        disks = self.client.describe_disks(
+            DescribeDisksRequest(region_id=self.region_id, instance_id=ecs_instance_id)
+        )
+        disks = disks.body.disks.disk
+        return disks
+
+    @staticmethod
+    def filter_disk_by_disk_type(disks: List[DiskDescription], type: DiskType):
+        return [disk for disk in disks if disk.type == type]
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    import os
+    from .settings import Settings
+
+    load_dotenv()
+
+    settings = Settings.new()
+    client = settings.get_aliyun_client()
+    block_storage_client = BlockStorageClient(client, settings.region_id)
+
+    # require an instance with only one data disk
+    ecs_instance_id = os.getenv("ecs_instance_id")
+    
+    assert isinstance(ecs_instance_id, str)
+    disks = block_storage_client.describe_disks(ecs_instance_id=ecs_instance_id)
+    data_disks = block_storage_client.filter_disk_by_disk_type(disks, "data")
+    assert len(data_disks) == 1 and data_disks[0].type == "data"

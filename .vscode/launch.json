@@ -10,6 +10,13 @@
             "type": "debugpy",
             "request": "launch",
             "module": "aliyun_dev_server_cli.__init__"
+        },
+        {
+            "name": "Python Debugger: Current Module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "aliyun_dev_server_cli.${fileBasenameNoExtension}",
+            "console": "integratedTerminal"
         }
     ]
 }

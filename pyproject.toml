@@ -31,4 +31,5 @@ distribution = true
 dev = [
     "ipython>=9.7.0",
     "pytest>=9.0.1",
+    "python-dotenv>=1.2.1",
 ]

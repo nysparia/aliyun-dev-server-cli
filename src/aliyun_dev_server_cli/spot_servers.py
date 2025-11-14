@@ -1,7 +1,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import select
-from typing import Annotated, List
+from typing import Annotated, List, Tuple
 import typing
 import inquirer
 import inquirer.errors
@@ -30,7 +30,7 @@ from itertools import chain
 from rich.style import Style
 
 from .aliyun import Client, ClientException
-from .settings import SingleKeyDict, get_tag_from_single_key_dict
+from .types import SingleKeyDict, get_tag_from_single_key_dict
 
 
 _log = structlog.get_logger(__name__)
@@ -45,6 +45,7 @@ class InstanceTypeZonePrice(BaseModel, arbitrary_types_allowed=True):
     zone_id: ZoneID
     price: DescribePriceResponseBodyPriceInfoPrice
     instance_type: InstanceTypeInfo
+    disk_category: str
 
 
 def batch_describe_price(
@@ -118,7 +119,9 @@ def batch_describe_price(
         asyncio.set_event_loop(loop)
 
         async def run():
-            async def describe_price_async() -> DescribePriceResponse | Exception:
+            async def describe_price_async() -> (
+                Tuple[DescribePriceResponse, DescribePriceRequestSystemDisk] | Exception
+            ):
                 _log.debug(
                     "describe_price_async:",
                     zone_id=zone_id,
@@ -147,7 +150,7 @@ def batch_describe_price(
                             instance_type_id=instance_type_id,
                             system_disk=system_disk_arg.category,
                         )
-                        return result
+                        return (result, system_disk_arg)
                     except Exception as err:
                         error = err
                         continue
@@ -160,8 +163,9 @@ def batch_describe_price(
             price_info = InstanceTypeZonePrice(
                 instance_type_id=instance_type_id,
                 zone_id=zone_id,
-                price=result.body.price_info.price,
+                price=result[0].body.price_info.price,
                 instance_type=instance_type,
+                disk_category=typing.cast(str, result[1].category),
             )
 
             return price_info
@@ -285,6 +289,10 @@ class SpotServerSelector:
             content.append(" ")
             content.append("zone_id=")
             content.append(str(zone_id), style=purple)
+            disk_category = server.disk_category
+            content.append(" ")
+            content.append("disk_category=")
+            content.append(str(disk_category), style=yellow)
 
             panel = Panel(
                 content,
@@ -331,13 +339,22 @@ class SpotServerSelector:
 
 
 class SpotServerCreator:
-    def __init__(self, client: Client) -> None:
+    def __init__(
+        self,
+        client: Client,
+        region_id: str,
+        resource_group_id: str,
+        included_automation_tag: SingleKeyDict,
+        instance_identifier_tag: SingleKeyDict,
+    ) -> None:
         self.client = client
+        self.region_id = region_id
+        self.resource_group_id = resource_group_id
+        self.included_automation_tag = included_automation_tag
+        self.instance_identifier_tag = instance_identifier_tag
 
     def create_server(
         self,
-        region_id: str,
-        resource_group_id: str,
         vswitch_id: str,
         instance_type_id: str,
         image_id: str,
@@ -349,10 +366,13 @@ class SpotServerCreator:
         security_group_id: str,
         instance_name: str,
         description: str,
-        automation_tag: SingleKeyDict,
-    ):
-        region_id = self.client._region_id
-        automation_tag_key, automation_tag_value = get_tag_from_single_key_dict(automation_tag)
+        dry_run: bool = False,
+    ) -> List[str]:
+        region_id = self.region_id
+        automation_tag = self._dict_to_request_tag(self.included_automation_tag)
+        instance_identifier_tag = self._dict_to_request_tag(
+            self.instance_identifier_tag
+        )
 
         # Maintain parameter order consistent with the Alibaba Cloud buy page UI
         request = RunInstancesRequest(
@@ -367,7 +387,7 @@ class SpotServerCreator:
             system_disk=RunInstancesRequestSystemDisk(
                 size=str(system_disk_size),
                 category=system_disk_category,
-                performance_level="PL0",
+                # performance_level="PL0",
             ),
             data_disk=[
                 RunInstancesRequestDataDisk(
@@ -378,13 +398,24 @@ class SpotServerCreator:
             ],
             security_group_id=security_group_id,
             password_inherit=True,
-            resource_group_id=resource_group_id,
+            resource_group_id=self.resource_group_id,
             instance_name=instance_name,
             description=description,
             tag=[
-                RunInstancesRequestTag(
-                    key=automation_tag_key, value=automation_tag_value
-                )
+                automation_tag,
+                instance_identifier_tag,
             ],
+            dry_run=dry_run
         )
-        # self.client.run_instances()
+
+        response = self.client.run_instances(request=request)
+        created = typing.cast(
+            List[str], response.body.instance_id_sets.instance_id_set or []
+        )
+        
+        return created
+
+    @staticmethod
+    def _dict_to_request_tag(tag: SingleKeyDict):
+        key, value = get_tag_from_single_key_dict(tag)
+        return RunInstancesRequestTag(key=key, value=value)

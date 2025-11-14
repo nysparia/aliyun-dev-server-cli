@@ -17,6 +17,7 @@ from pydantic_settings import (
 )
 
 from .aliyun import Config, Client
+from .types import SingleKeyDict, get_tag_from_single_key_dict
 
 __home_dir = pathlib.Path.home()
 _config_file = __home_dir / ".config" / "aliyun-dev-server-cli.config.toml"
@@ -36,20 +37,7 @@ def validate_memory_range(v: Tuple[float, float]):
     return v
 
 
-def validate_single_key_dict(v: dict[str, str]) -> dict[str, str]:
-    """Validate that a dictionary contains exactly one key-value pair."""
-    if len(v) != 1:
-        raise ValueError(
-            f"Dictionary must contain exactly one key-value pair, got {len(v)} keys: {list(v.keys())}"
-        )
-    return v
 
-
-SingleKeyDict = Annotated[dict[str, str], AfterValidator(validate_single_key_dict)]
-
-
-def get_tag_from_single_key_dict(v: SingleKeyDict) -> Tuple[str, str]:
-    return next(iter(v.items()))
 
 
 CPUCountRange = Annotated[
@@ -70,17 +58,18 @@ class DevServerCreationSettings(BaseModel):
     included_automation_tag: SingleKeyDict = {"nysparis:automation-usage": "dev"}
     excluded_automation_tag: SingleKeyDict = {"nysparis:automation-usage": "none"}
     instance_automation_identifier: str = "dev-server"
-    _data_disk_snapshot_tag_key: str = "nysparis:automation:data_disk_instance"
+    data_disk_identifier_tag: SingleKeyDict = {"nysparis:automation:disk-type": "data"}
+    _instance_identifier_tag: str = "nysparis:automation:instance-identifier"
 
-    def data_disk_snapshot_tag(self) -> SingleKeyDict:
-        return {self._data_disk_snapshot_tag_key: self.instance_automation_identifier}
+    def instance_identifier_tag(self) -> SingleKeyDict:
+        return {self._instance_identifier_tag: self.instance_automation_identifier}
 
 
 class SpotInstanceCreationSettings(BaseModel):
     dev_server: DevServerCreationSettings
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings, extra="allow"):
     model_config = SettingsConfigDict(env_file=".env", cli_parse_args=True)
 
     access_key_id: str
