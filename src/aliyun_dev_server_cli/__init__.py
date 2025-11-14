@@ -6,6 +6,7 @@ from alibabacloud_ecs20140526.models import (
 import structlog
 from rich.pretty import pprint
 
+from .engine import Engine
 from .settings import Settings
 from .aliyun import *
 from .spot_servers import SpotServerCreator, SpotServerSelector, batch_describe_price
@@ -154,7 +155,7 @@ def main():
     )
 
     assert len(created_instance_ids) == 1
-
+    
     block_storage_client = BlockStorageClient(client, region_id)
     created_disks = block_storage_client.describe_disks(created_instance_ids[0])
 
@@ -169,5 +170,13 @@ def main():
     block_storage_client.tag_data_disks(created_disks, data_disk_identifier_tag)
 
 
+def main2():
+    settings = Settings.new()
+    engine = Engine(settings=settings)
+
+    server_selected = engine.select_instance_type()
+    engine.relaunch_dev_server(server_selected=server_selected)
+
+
 if __name__ == "__main__":
-    main()
+    main2()
