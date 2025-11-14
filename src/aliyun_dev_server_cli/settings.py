@@ -39,11 +39,17 @@ def validate_memory_range(v: Tuple[float, float]):
 def validate_single_key_dict(v: dict[str, str]) -> dict[str, str]:
     """Validate that a dictionary contains exactly one key-value pair."""
     if len(v) != 1:
-        raise ValueError(f"Dictionary must contain exactly one key-value pair, got {len(v)} keys: {list(v.keys())}")
+        raise ValueError(
+            f"Dictionary must contain exactly one key-value pair, got {len(v)} keys: {list(v.keys())}"
+        )
     return v
 
 
 SingleKeyDict = Annotated[dict[str, str], AfterValidator(validate_single_key_dict)]
+
+
+def get_tag_from_single_key_dict(v: SingleKeyDict) -> Tuple[str, str]:
+    return next(iter(v.items()))
 
 
 CPUCountRange = Annotated[
@@ -61,12 +67,13 @@ class DevServerCreationSettings(BaseModel):
     # convenient instance type checklist to accelerate the price fetching
     instance_types_checklist: Optional[List[str]] = None
     resource_group_name: str = "dev-resource-group"
-    included_automation_tag: SingleKeyDict = {
-        "nysparis:nysparis:automation-usage": "dev"
-    }
-    excluded_automation_tag: SingleKeyDict = {
-        "nysparis:nysparis:automation-usage": "none"
-    }
+    included_automation_tag: SingleKeyDict = {"nysparis:automation-usage": "dev"}
+    excluded_automation_tag: SingleKeyDict = {"nysparis:automation-usage": "none"}
+    instance_automation_identifier: str = "dev-server"
+    _data_disk_snapshot_tag_key: str = "nysparis:automation:data_disk_instance"
+
+    def data_disk_snapshot_tag(self) -> SingleKeyDict:
+        return {self._data_disk_snapshot_tag_key: self.instance_automation_identifier}
 
 
 class SpotInstanceCreationSettings(BaseModel):

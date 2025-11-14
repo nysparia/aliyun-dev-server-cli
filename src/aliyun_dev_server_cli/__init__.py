@@ -1,12 +1,14 @@
+import pprint
 from alibabacloud_ecs20140526.models import (
     DescribeImagesRequest,
     DescribeInstanceTypesRequest,
 )
 import structlog
+from rich.pretty import pprint
 
 from .settings import Settings
 from .aliyun import *
-from .servers import SpotServerSelector, batch_describe_price
+from .spot_servers import SpotServerSelector, batch_describe_price
 
 _log = structlog.get_logger(__name__)
 
@@ -66,7 +68,32 @@ def main():
         server_selected.zone_id,
     )
 
-    # Retrieve images matching the configured pattern
+    # Retrieve the vswitch matching the configured pattern
+    access_key_id = settings.access_key_id
+    access_key_secret = settings.access_key_secret
+    resource_group_name = dev_server_creation_settings.resource_group_name
+    resource_manager_client = ResourceManagerClient(
+        access_key_id, access_key_secret.get_secret_value(), resource_group_name
+    )
+    resource_group_id = resource_manager_client.resource_group_id()
+
+    included_automation_tag = dev_server_creation_settings.included_automation_tag
+    excluded_automation_tag = dev_server_creation_settings.excluded_automation_tag
+    vpc_client = VPCClient(
+        access_key_id,
+        access_key_secret.get_secret_value(),
+        region_id,
+        resource_group_id,
+        included_automation_tag,
+        excluded_automation_tag,
+    )
+
+    vpc = vpc_client.describe_matched_vpc()
+    vpc_id = typing.cast(str, vpc.vpc_id)
+    vswitch = vpc_client.get_suitable_vswitch(server_selected.zone_id, vpc_id)
+    security_group = vpc_client.describe_security_group(vpc_id)
+
+    # Retrieve the image matching the configured pattern
     images = client.describe_images(
         DescribeImagesRequest(
             region_id=region_id,
@@ -80,15 +107,6 @@ def main():
         len(images),
         images=[image.image_name for image in images],
     )
-
-    access_key_id = settings.access_key_id
-    access_key_secret = settings.access_key_secret
-    resource_group_name = dev_server_creation_settings.resource_group_name
-    resource_manager_client = ResourceManagerClient(
-        access_key_id, access_key_secret.get_secret_value(), resource_group_name
-    )
-    resource_group_id = resource_manager_client.resource_group_id()
-    # included_automation_tag = 
 
 
 if __name__ == "__main__":

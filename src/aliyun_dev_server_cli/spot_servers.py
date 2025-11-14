@@ -15,6 +15,9 @@ from alibabacloud_ecs20140526.models import (
     DescribePriceResponseBodyPriceInfoPrice,
     DescribeInstanceTypesResponseBodyInstanceTypesInstanceType as InstanceTypeInfo,
     RunInstancesRequest,
+    RunInstancesRequestDataDisk,
+    RunInstancesRequestSystemDisk,
+    RunInstancesRequestTag,
 )
 from rich.columns import Columns
 from rich.console import Console
@@ -27,6 +30,7 @@ from itertools import chain
 from rich.style import Style
 
 from .aliyun import Client, ClientException
+from .settings import SingleKeyDict, get_tag_from_single_key_dict
 
 
 _log = structlog.get_logger(__name__)
@@ -326,17 +330,61 @@ class SpotServerSelector:
     pass
 
 
-    
-
-
 class SpotServerCreator:
     def __init__(self, client: Client) -> None:
         self.client = client
 
-    def create_server(self, region_id: str, zone_id: str, resource_group_id: str):
+    def create_server(
+        self,
+        region_id: str,
+        resource_group_id: str,
+        vswitch_id: str,
+        instance_type_id: str,
+        image_id: str,
+        system_disk_size: int,
+        system_disk_category: str,
+        data_disk_size: int,
+        data_disk_category: str,
+        data_disk_snapshot_id: str,
+        security_group_id: str,
+        instance_name: str,
+        description: str,
+        automation_tag: SingleKeyDict,
+    ):
         region_id = self.client._region_id
+        automation_tag_key, automation_tag_value = get_tag_from_single_key_dict(automation_tag)
+
         # Maintain parameter order consistent with the Alibaba Cloud buy page UI
         request = RunInstancesRequest(
-            region_id=region_id, spot_strategy="SpotAsPriceGo"
+            instance_charge_type="PostPaid",
+            region_id=region_id,
+            v_switch_id=vswitch_id,
+            instance_type=instance_type_id,
+            spot_strategy="SpotAsPriceGo",
+            spot_duration=0,
+            spot_interruption_behavior="Stop",
+            image_id=image_id,
+            system_disk=RunInstancesRequestSystemDisk(
+                size=str(system_disk_size),
+                category=system_disk_category,
+                performance_level="PL0",
+            ),
+            data_disk=[
+                RunInstancesRequestDataDisk(
+                    size=data_disk_size,
+                    category=data_disk_category,
+                    snapshot_id=data_disk_snapshot_id,
+                )
+            ],
+            security_group_id=security_group_id,
+            password_inherit=True,
+            resource_group_id=resource_group_id,
+            instance_name=instance_name,
+            description=description,
+            tag=[
+                RunInstancesRequestTag(
+                    key=automation_tag_key, value=automation_tag_value
+                )
+            ],
         )
         # self.client.run_instances()

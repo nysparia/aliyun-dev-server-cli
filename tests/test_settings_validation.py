@@ -40,5 +40,5 @@ def test_default_values():
     settings = DevServerCreationSettings(
         image_name_pattern="test-pattern"
     )
-    assert settings.included_automation_tag == {"nysparis:nysparis:automation-usage": "dev"}
-    assert settings.excluded_automation_tag == {"nysparis:nysparis:automation-usage": "none"}
+    assert settings.included_automation_tag == {"nysparis:automation-usage": "dev"}
+    assert settings.excluded_automation_tag == {"nysparis:automation-usage": "none"}
