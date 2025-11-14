@@ -1,0 +1,18 @@
+{
+    "cSpell.words": [
+        "alibabacloud",
+        "aliyun",
+        "colorama",
+        "customise",
+        "debugpy",
+        "dotenv",
+        "essd",
+        "nysparia",
+        "pydantic",
+        "structlog"
+    ],
+    "cSpell.ignorePaths": [
+        "/.gitignore"
+    ],
+    "python-envs.pythonProjects": []
+}
