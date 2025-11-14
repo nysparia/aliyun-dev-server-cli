@@ -10,7 +10,8 @@ dependencies = [
     "structlog==25.*",
     "colorama==0.4.6",
     "rich==14.*",
-    "aiodns>=3.5.0",
+    "aiodns==3.*",
+    "inquirer>=3.4.1",
 ]
 requires-python = ">=3.13"
 readme = "README.md"
