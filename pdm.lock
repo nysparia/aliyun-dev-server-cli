@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:90bbbb091f7bd7fc4b87c8615982524135877bbf5126a97559d112f35ceffa4f"
+content_hash = "sha256:1f6690e6f523b18b83945add0b6199d8bd091717874fc2f11efa7df7a3cb327d"
 
 [[metadata.targets]]
 requires_python = ">=3.13"
@@ -190,6 +190,21 @@ files = [
 ]
 
 [[package]]
+name = "alibabacloud-resourcemanager20200331"
+version = "2.4.0"
+summary = ""
+dependencies = [
+    "alibabacloud-endpoint-util",
+    "alibabacloud-openapi-util",
+    "alibabacloud-tea-openapi",
+    "alibabacloud-tea-util",
+]
+files = [
+    {file = "alibabacloud_resourcemanager20200331-2.4.0-py3-none-any.whl", hash = "sha256:f78c78b28ef33e0ff7f79bda71bb00e39011e7271ff661519e895ca60b3762db"},
+    {file = "alibabacloud_resourcemanager20200331-2.4.0.tar.gz", hash = "sha256:63aaef2e647361287d785aa048a3e19b864b44be1bc9332768355193bbf4c0a5"},
+]
+
+[[package]]
 name = "alibabacloud-tea"
 version = "0.4.3"
 summary = ""
@@ -226,6 +241,21 @@ dependencies = [
 ]
 files = [
     {file = "alibabacloud_tea_util-0.3.13.tar.gz", hash = "sha256:8cbdfd2a03fbbf622f901439fa08643898290dd40e1d928347f6346e43f63c90"},
+]
+
+[[package]]
+name = "alibabacloud-vpc20160428"
+version = "6.13.0"
+summary = ""
+dependencies = [
+    "alibabacloud-endpoint-util",
+    "alibabacloud-openapi-util",
+    "alibabacloud-tea-openapi",
+    "alibabacloud-tea-util",
+]
+files = [
+    {file = "alibabacloud_vpc20160428-6.13.0-py3-none-any.whl", hash = "sha256:933cf1e74322a20a2df27ca6323760d857744a4246eeadc9fb3eae01322fb1c6"},
+    {file = "alibabacloud_vpc20160428-6.13.0.tar.gz", hash = "sha256:daf00679a83d422799f9fcf263739fe1f360641675843cbfbe623833fc8b1681"},
 ]
 
 [[package]]
@@ -556,6 +586,15 @@ files = [
 ]
 
 [[package]]
+name = "iniconfig"
+version = "2.3.0"
+summary = ""
+files = [
+    {file = "iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12"},
+    {file = "iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730"},
+]
+
+[[package]]
 name = "inquirer"
 version = "3.4.1"
 summary = ""
@@ -741,6 +780,15 @@ files = [
 ]
 
 [[package]]
+name = "packaging"
+version = "25.0"
+summary = ""
+files = [
+    {file = "packaging-25.0-py3-none-any.whl", hash = "sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484"},
+    {file = "packaging-25.0.tar.gz", hash = "sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f"},
+]
+
+[[package]]
 name = "parso"
 version = "0.8.5"
 summary = ""
@@ -759,6 +807,15 @@ dependencies = [
 files = [
     {file = "pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523"},
     {file = "pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f"},
+]
+
+[[package]]
+name = "pluggy"
+version = "1.6.0"
+summary = ""
+files = [
+    {file = "pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746"},
+    {file = "pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3"},
 ]
 
 [[package]]
@@ -1008,6 +1065,22 @@ summary = ""
 files = [
     {file = "pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b"},
     {file = "pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887"},
+]
+
+[[package]]
+name = "pytest"
+version = "9.0.1"
+summary = ""
+dependencies = [
+    "colorama; sys_platform == \"win32\"",
+    "iniconfig",
+    "packaging",
+    "pluggy",
+    "pygments",
+]
+files = [
+    {file = "pytest-9.0.1-py3-none-any.whl", hash = "sha256:67be0030d194df2dfa7b556f2e56fb3c3315bd5c8822c6951162b92b32ce7dad"},
+    {file = "pytest-9.0.1.tar.gz", hash = "sha256:3e9c069ea73583e255c3b21cf46b8d3c56f6e3a1a8f6da94ccb0fcf57b9d73c8"},
 ]
 
 [[package]]

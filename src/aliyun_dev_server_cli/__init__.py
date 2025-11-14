@@ -55,6 +55,7 @@ def main():
         instance_types,
     )
 
+    # Select target instance type to create
     spot_server_selector = SpotServerSelector()
     spot_server_selector.display_servers(prices)
     server_selected = spot_server_selector.select_server(prices)
@@ -64,7 +65,7 @@ def main():
         server_selected.instance_type.instance_type_id,
         server_selected.zone_id,
     )
-    
+
     # Retrieve images matching the configured pattern
     images = client.describe_images(
         DescribeImagesRequest(
@@ -79,6 +80,15 @@ def main():
         len(images),
         images=[image.image_name for image in images],
     )
+
+    access_key_id = settings.access_key_id
+    access_key_secret = settings.access_key_secret
+    resource_group_name = dev_server_creation_settings.resource_group_name
+    resource_manager_client = ResourceManagerClient(
+        access_key_id, access_key_secret.get_secret_value(), resource_group_name
+    )
+    resource_group_id = resource_manager_client.resource_group_id()
+    # included_automation_tag = 
 
 
 if __name__ == "__main__":

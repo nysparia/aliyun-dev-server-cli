@@ -14,6 +14,7 @@ from alibabacloud_ecs20140526.models import (
     DescribePriceResponse,
     DescribePriceResponseBodyPriceInfoPrice,
     DescribeInstanceTypesResponseBodyInstanceTypesInstanceType as InstanceTypeInfo,
+    RunInstancesRequest,
 )
 from rich.columns import Columns
 from rich.console import Console
@@ -305,7 +306,7 @@ class SpotServerSelector:
                     "", reason=f"input must be between 0 and {len(servers) - 1}"
                 )
             return True
-        
+
         self.print_rule()
 
         message = str(self.select_prompt(len(servers)))
@@ -323,3 +324,19 @@ class SpotServerSelector:
         return selected
 
     pass
+
+
+    
+
+
+class SpotServerCreator:
+    def __init__(self, client: Client) -> None:
+        self.client = client
+
+    def create_server(self, region_id: str, zone_id: str, resource_group_id: str):
+        region_id = self.client._region_id
+        # Maintain parameter order consistent with the Alibaba Cloud buy page UI
+        request = RunInstancesRequest(
+            region_id=region_id, spot_strategy="SpotAsPriceGo"
+        )
+        # self.client.run_instances()

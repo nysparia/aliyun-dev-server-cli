@@ -8,8 +8,11 @@
         "dotenv",
         "essd",
         "nysparia",
+        "nysparis",
         "pydantic",
-        "structlog"
+        "resourcemanager",
+        "structlog",
+        "vswitches"
     ],
     "cSpell.ignorePaths": [
         "/.gitignore"

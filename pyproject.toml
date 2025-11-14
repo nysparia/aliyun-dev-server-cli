@@ -12,6 +12,8 @@ dependencies = [
     "rich==14.*",
     "aiodns==3.*",
     "inquirer>=3.4.1",
+    "alibabacloud-resourcemanager20200331==2.4.*",
+    "alibabacloud-vpc20160428>=6.13.0",
 ]
 requires-python = ">=3.13"
 readme = "README.md"
@@ -28,4 +30,5 @@ distribution = true
 [dependency-groups]
 dev = [
     "ipython>=9.7.0",
+    "pytest>=9.0.1",
 ]
