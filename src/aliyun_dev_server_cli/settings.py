@@ -1,6 +1,6 @@
 import pathlib
 import re
-from typing import Annotated, List, Optional, Tuple, override
+from typing import Annotated, List, LiteralString, Optional, Tuple, override
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -37,9 +37,6 @@ def validate_memory_range(v: Tuple[float, float]):
     return v
 
 
-
-
-
 CPUCountRange = Annotated[
     Tuple[NonNegativeInt, NonNegativeInt], AfterValidator(validate_cpu_range)
 ]
@@ -52,17 +49,39 @@ class DevServerCreationSettings(BaseModel):
     image_name_pattern: str
     cpu_count_range: CPUCountRange = (16, 32)
     memory_size_range: MemoryGiBRange = (16, 32)
-    # convenient instance type checklist to accelerate the price fetching
+    # Convenient instance type checklist to accelerate price fetching
     instance_types_checklist: Optional[List[str]] = None
     resource_group_name: str = "dev-resource-group"
     included_automation_tag: SingleKeyDict = {"nysparis:automation-usage": "dev"}
     excluded_automation_tag: SingleKeyDict = {"nysparis:automation-usage": "none"}
-    instance_automation_identifier: str = "dev-server"
-    data_disk_identifier_tag: SingleKeyDict = {"nysparis:automation:disk-type": "data"}
+    instance_identifier: str = "dev-server"
     _instance_identifier_tag: str = "nysparis:automation:instance-identifier"
+    dev_data_snapshot_identifier: str = "dev-data"
+    _disk_to_snapshot_prefix: LiteralString = "nysparis:automation:disk-to-snapshot"
+    _snapshot_content_identifier_key: LiteralString = "snapshot-content-identifier"
+    _disk_to_snapshot_tag: LiteralString = (
+        f"{_disk_to_snapshot_prefix}:{_snapshot_content_identifier_key}"
+    )
+    _snapshot_content_identifier_tag: str = (
+        f"nysparis:automation:{_snapshot_content_identifier_key}"
+    )
 
     def instance_identifier_tag(self) -> SingleKeyDict:
-        return {self._instance_identifier_tag: self.instance_automation_identifier}
+        return {self._instance_identifier_tag: self.instance_identifier}
+
+    def dev_data_snapshot_content_identifier_tag(self) -> SingleKeyDict:
+        return {
+            self._snapshot_content_identifier_tag: self.dev_data_snapshot_identifier
+        }
+
+    def disk_to_snapshot_tag(self) -> SingleKeyDict:
+        return {self._disk_to_snapshot_tag: self.dev_data_snapshot_identifier}
+
+    def parse_disk_to_snapshot_tag(self, key: str, value: str) -> SingleKeyDict | None:
+        if self._disk_to_snapshot_tag != key:
+            return None
+        else:
+            return {self._snapshot_content_identifier_tag: value}
 
 
 class SpotInstanceCreationSettings(BaseModel):

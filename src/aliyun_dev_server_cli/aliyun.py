@@ -11,6 +11,8 @@ import typing
 from alibabacloud_ecs20140526.client import Client
 from alibabacloud_tea_openapi.models import Config
 from alibabacloud_ecs20140526.models import (
+    CreateSnapshotRequest,
+    CreateSnapshotRequestTag,
     DescribeDisksRequest,
     DescribeSecurityGroupsRequest,
     DescribeSecurityGroupsRequestTag,
@@ -36,6 +38,8 @@ from alibabacloud_vpc20160428.models import (
 )
 from rich import region
 import structlog
+
+from aliyun_dev_server_cli.settings import DevServerCreationSettings
 
 from .types import DiskType, SingleKeyDict, get_tag_from_single_key_dict
 
@@ -240,7 +244,11 @@ class VPCClient:
             List of matched VSwitch information
         """
         # Query Aliyun VPC service for VSwitches in the matched VPC
-        result = self.client.describe_vswitches(DescribeVSwitchesRequest(vpc_id=vpc_id))
+        result = self.client.describe_vswitches(
+            DescribeVSwitchesRequest(
+                vpc_id=vpc_id, resource_group_id=self.resource_group_id
+            )
+        )
         result = result.body.v_switches.v_switch
 
         self.logger.debug(
@@ -336,6 +344,7 @@ class VPCClient:
                 tag=VPCClient._dict_tags_to_security_groups_request_tags(
                     self._original_included_automation_tag
                 ),
+                resource_group_id=self.resource_group_id,
             )
         )
         security_groups = security_groups.body.security_groups.security_group
@@ -370,25 +379,23 @@ class SnapshotClient:
         region_id: str,
         resource_group_id: str,
         included_automation_tag: SingleKeyDict,
-        instance_identifier_tag: SingleKeyDict,
-        data_disk_identifier_tag: SingleKeyDict,
+        dev_data_snapshot_identifier_tag: SingleKeyDict,
+        settings: DevServerCreationSettings,
     ):
         self.client = client
         self.region_id = region_id
         self.resource_group_id = resource_group_id
         self.included_automation_tag = included_automation_tag
-        self.instance_identifier_tag = instance_identifier_tag
-        self.data_disk_identifier_tag = data_disk_identifier_tag
+        self.dev_data_snapshot_identifier_tag = dev_data_snapshot_identifier_tag
+        self.settings = settings
 
         automation_tag = self._dict_to_request_tag(self.included_automation_tag)
-        instance_identifier = self._dict_to_request_tag(self.instance_identifier_tag)
-        data_disk_identifier = self._dict_to_request_tag(self.data_disk_identifier_tag)
+        tag2 = self._dict_to_request_tag(self.dev_data_snapshot_identifier_tag)
 
-        self.tags = [automation_tag, instance_identifier, data_disk_identifier]
+        self.tags = [automation_tag, tag2]
         self._original_tags = [
             self.included_automation_tag,
-            self.instance_identifier_tag,
-            self.data_disk_identifier_tag,
+            self.dev_data_snapshot_identifier_tag,
         ]
 
     def describe_matched_snapshots(self, source_disk_type: DiskType = "data"):
@@ -425,16 +432,48 @@ class SnapshotClient:
         snapshots.sort(key=lambda x: str(x.creation_time), reverse=True)
         return snapshots[0]
 
+    @staticmethod
+    def _dict_to_disk_request_tag(tag: SingleKeyDict) -> CreateSnapshotRequestTag:
+        tag_key, tag_value = get_tag_from_single_key_dict(tag)
+        return CreateSnapshotRequestTag(key=tag_key, value=tag_value)
+
+    def disk_to_snap(self, disk: DiskDescription):
+        disk_id = typing.cast(str, disk.disk_id)
+        disk_tags = disk.tags.tag
+        tags = [
+            self.settings.parse_disk_to_snapshot_tag(
+                typing.cast(str, disk_tag.tag_key), typing.cast(str, disk_tag.tag_value)
+            )
+            for disk_tag in disk_tags
+        ]
+        tags = [tag for tag in tags if tag]
+        tags = [self._original_tags[0], *tags]
+        tags = [self._dict_to_disk_request_tag(tag) for tag in tags]
+
+        result = self.client.create_snapshot(
+            CreateSnapshotRequest(
+                disk_id=disk_id, resource_group_id=self.resource_group_id, tag=tags
+            )
+        )
+
+        snapshot_id = typing.cast(str, result.body.snapshot_id)
+        return snapshot_id
+
 
 class BlockStorageClient:
-    def __init__(self, client: Client, region_id: str) -> None:
+    def __init__(self, client: Client, region_id: str, resource_group_id: str) -> None:
         self.client = client
         self.region_id = region_id
+        self.resource_group_id = resource_group_id
         self.logger = structlog.get_logger()
 
     def describe_disks(self, ecs_instance_id: str) -> List[DiskDescription]:
         disks = self.client.describe_disks(
-            DescribeDisksRequest(region_id=self.region_id, instance_id=ecs_instance_id)
+            DescribeDisksRequest(
+                region_id=self.region_id,
+                instance_id=ecs_instance_id,
+                resource_group_id=self.resource_group_id,
+            )
         )
         disks = disks.body.disks.disk
         return disks
@@ -471,22 +510,20 @@ class BlockStorageClient:
 
         return len(disk_ids)
 
-    def tag_data_disks(
-        self, disks: List[DiskDescription], data_disk_identifier_tag: SingleKeyDict
-    ):
-        """Tag data disks with the specified identifier tag for future identification.
+    def tag_data_disks(self, disks: List[DiskDescription], tag: SingleKeyDict):
+        """Tag data disks with a tag for future identification.
 
         Filters the provided disks to only include data disks, then tags the specified
-        identifier tag to these disks.
+        tag to these disks.
 
         Args:
             disks: List of disk descriptions to potentially tag
-            data_disk_identifier_tag: The tag to apply to data disks for identification
+            tag: The tag to apply to data disks for identification
 
         Returns:
             The number of data disks that were tagged
         """
-        key, value = get_tag_from_single_key_dict(data_disk_identifier_tag)
+        key, value = get_tag_from_single_key_dict(tag)
         data_disks = self.filter_disk_by_disk_type(disks=disks, type="data")
         data_disk_ids = [disk.disk_id for disk in data_disks]
         data_disk_ids = typing.cast(List[str], data_disk_ids)
@@ -503,7 +540,7 @@ class BlockStorageClient:
             "tag %i data disk(s).",
             len(data_disk_ids),
             data_disk_ids=data_disk_ids,
-            tag=data_disk_identifier_tag,
+            tag=tag,
         )
 
         return len(data_disk_ids)
@@ -516,15 +553,19 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    settings = Settings.new()
-    client = settings.get_aliyun_client()
-    block_storage_client = BlockStorageClient(client, settings.region_id)
-
     # Requires an instance with exactly one data disk.
     # Both system disk and data disk must use cloud_auto storage category.
     ecs_instance_id = os.getenv("ecs_instance_id")
+    dev_resource_group_id = os.getenv("dev_resource_group_id")
 
     assert isinstance(ecs_instance_id, str)
+    assert isinstance(dev_resource_group_id, str)
+
+    settings = Settings.new()
+    client = settings.get_aliyun_client()
+    block_storage_client = BlockStorageClient(
+        client, settings.region_id, dev_resource_group_id
+    )
 
     disks = block_storage_client.describe_disks(ecs_instance_id=ecs_instance_id)
     data_disks = block_storage_client.filter_disk_by_disk_type(disks, "data")
@@ -537,7 +578,7 @@ if __name__ == "__main__":
     assert num_toggled == 2
 
     num_tagged = block_storage_client.tag_data_disks(
-        disks=disks, data_disk_identifier_tag={"nysparis:test:tag1": "true"}
+        disks=disks, tag={"nysparis:test:tag1": "true"}
     )
 
     assert num_tagged == 1

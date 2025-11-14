@@ -118,8 +118,8 @@ def batch_describe_price(
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        async def run():
-            async def describe_price_async() -> (
+        def run():
+            def describe_price_async() -> (
                 Tuple[DescribePriceResponse, DescribePriceRequestSystemDisk] | Exception
             ):
                 _log.debug(
@@ -133,7 +133,7 @@ def batch_describe_price(
 
                 for system_disk_arg in system_disk_args:
                     try:
-                        result = await client.describe_price_async(
+                        result = client.describe_price(
                             DescribePriceRequest(
                                 resource_type="Instance",
                                 instance_type=instance_type_id,
@@ -156,7 +156,7 @@ def batch_describe_price(
                         continue
                 return error or Exception("this should not happen")
 
-            result = await describe_price_async()
+            result = describe_price_async()
             if isinstance(result, Exception):
                 return result
 
@@ -170,8 +170,7 @@ def batch_describe_price(
 
             return price_info
 
-        result = loop.run_until_complete(run())
-        loop.close()
+        result = run()
         return result
 
     with ThreadPoolExecutor(max_workers=24) as executor:
@@ -181,6 +180,7 @@ def batch_describe_price(
         ]
 
         prices = [future.result() for future in futures]
+        _log.debug("all futures collected.")
 
     wrong_system_disk_prices = [
         price
@@ -405,14 +405,14 @@ class SpotServerCreator:
                 automation_tag,
                 instance_identifier_tag,
             ],
-            dry_run=dry_run
+            dry_run=dry_run,
         )
 
         response = self.client.run_instances(request=request)
         created = typing.cast(
             List[str], response.body.instance_id_sets.instance_id_set or []
         )
-        
+
         return created
 
     @staticmethod

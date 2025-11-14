@@ -117,14 +117,18 @@ class Engine:
 
         # Retrieve the matched data disk snapshot
         instance_identifier_tag = dev_server_creation_settings.instance_identifier_tag()
-        data_disk_identifier_tag = dev_server_creation_settings.data_disk_identifier_tag
+        dev_data_snapshot_content_identifier_tag = (
+            dev_server_creation_settings.dev_data_snapshot_content_identifier_tag()
+        )
+        disk_to_snapshot_tag = dev_server_creation_settings.disk_to_snapshot_tag()
+
         snapshot_client = SnapshotClient(
             client,
             region_id=settings.region_id,
             resource_group_id=resource_group_id,
             included_automation_tag=included_automation_tag,
-            instance_identifier_tag=instance_identifier_tag,
-            data_disk_identifier_tag=data_disk_identifier_tag,
+            dev_data_snapshot_identifier_tag=dev_data_snapshot_content_identifier_tag,
+            settings=dev_server_creation_settings ,
         )
 
         snapshot = snapshot_client.describe_latest_matched_snapshot("data")
@@ -155,7 +159,7 @@ class Engine:
             data_disk_category=server_selected.disk_category,
             data_disk_snapshot_id=snapshot_id,
             security_group_id=security_group_id,
-            instance_name=dev_server_creation_settings.instance_automation_identifier,
+            instance_name=dev_server_creation_settings.instance_identifier,
             description="created by nysparis aliyun dev server cli",
             # dry_run=True,
         )
@@ -167,19 +171,23 @@ class Engine:
         # Wait for disks to be created with retry mechanism
         max_retries = 15
         retry_delay = 0.8
-        block_storage_client = BlockStorageClient(client, settings.region_id)
-        
+        block_storage_client = BlockStorageClient(
+            client, settings.region_id, resource_group_id
+        )
+
         created_disks = None
         for attempt in range(max_retries):
             created_disks = block_storage_client.describe_disks(created_instance_ids[0])
             if len(created_disks) >= 2:  # Expecting at least 2 disks (system + data)
                 break
-            _log.debug(f"Disks not ready yet, retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
+            _log.debug(
+                f"Disks not ready yet, retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})"
+            )
             time.sleep(retry_delay)
-        
+
         if created_disks is None or len(created_disks) < 2:
             raise RuntimeError(f"Failed to retrieve disks after {max_retries} attempts")
-            
+
         assert len(created_disks) == 2
 
         data_disks = block_storage_client.filter_disk_by_disk_type(
@@ -190,5 +198,5 @@ class Engine:
         # enable performance bursting for created disks if suitable
         block_storage_client.toggle_bursting(created_disks, True)
 
-        # Tag the data disk using the data disk identifier for future identification
-        block_storage_client.tag_data_disks(created_disks, data_disk_identifier_tag)
+        # Tag the data disk using the data disk identifier for future identification (when disk to snapshot)
+        block_storage_client.tag_data_disks(created_disks, disk_to_snapshot_tag)
